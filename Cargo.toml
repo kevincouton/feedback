@@ -1,0 +1,40 @@
+[package]
+name = "feedback-server"
+version = "0.1.0"
+edition = "2021"
+description = "Self-hosted feedback service for the lucanian.app product fleet"
+license = "MIT"
+publish = false
+
+[dependencies]
+axum = "0.8"
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.9", default-features = false, features = [
+    "macros",
+    "migrate",
+    "runtime-tokio",
+    "sqlite",
+] }
+tokio = { version = "1", features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "signal",
+    "time",
+] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+
+[lints.clippy]
+# Google Rust Style Guide alignment (see RUST_STYLE.md): enable what passes
+# cleanly; anything allow-listed below is a deliberate, commented deviation.
+wildcard_imports = "warn"
+uninlined_format_args = "warn"
+implicit_clone = "warn"
+redundant_field_names = "warn"
+ptr_arg = "warn"
