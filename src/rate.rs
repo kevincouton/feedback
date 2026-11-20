@@ -54,7 +54,7 @@ impl Bucket {
 /// In-memory per-IP token buckets.
 #[derive(Debug, Default)]
 pub struct RateLimiter {
-    buckets: Mutex<HashMap<SocketAddr, Bucket>>,
+    buckets: Mutex<HashMap<std::net::IpAddr, Bucket>>,
 }
 
 impl RateLimiter {
@@ -64,7 +64,7 @@ impl RateLimiter {
 
     /// Record one attempt from `ip`. `Ok(())` = allowed; `Err(retry_after)`
     /// = rejected, retry after the returned duration.
-    pub fn check(&self, ip: SocketAddr) -> Result<(), Duration> {
+    pub fn check(&self, ip: std::net::IpAddr) -> Result<(), Duration> {
         let now = Instant::now();
         let mut buckets = self.buckets.lock().expect("rate limiter poisoned");
         let bucket = buckets.entry(ip).or_insert_with(|| Bucket::new(now));
@@ -74,6 +74,12 @@ impl RateLimiter {
 
 /// Axum middleware: applies the per-IP bucket to POST /api/feedback only.
 /// Other routes (status pages, widget) are not intake and stay unlimited.
+///
+/// IP resolution: behind a proxy (this fleet sits behind Caddy, and
+/// feedback.lucanian.app currently resolves via Cloudflare) the direct peer
+/// is the proxy, so a present `CF-Connecting-IP` header takes precedence;
+/// otherwise the socket peer IP is used. Spoofing that header only rotates
+/// the per-identity bucket, which still caps each identity at the same rate.
 pub async fn rate_limit_middleware(
     State(limiter): State<Arc<RateLimiter>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -83,7 +89,13 @@ pub async fn rate_limit_middleware(
     if request.method() != axum::http::Method::POST || request.uri().path() != "/api/feedback" {
         return next.run(request).await;
     }
-    match limiter.check(addr) {
+    let ip = request
+        .headers()
+        .get("cf-connecting-ip")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| addr.ip());
+    match limiter.check(ip) {
         Ok(()) => next.run(request).await,
         Err(retry_after) => {
             let retry_secs = retry_after.as_secs().max(1);

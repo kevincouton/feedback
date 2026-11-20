@@ -368,6 +368,51 @@ async fn rate_limit_triggers_then_recovers_by_ip() {
 }
 
 #[tokio::test]
+async fn rate_limit_uses_cf_connecting_ip_when_present() {
+    let (state, _dir) = test_state().await;
+    let public = public_router(state);
+
+    // Same direct peer (a proxy): visitor 1 exhausts their bucket, while a
+    // different visitor behind the same peer is unaffected.
+    for i in 1..=5u8 {
+        let mut req = json_request(
+            Method::POST,
+            "/api/feedback",
+            Some(submit_body("risk", "useful", "via cf")),
+            None,
+            99,
+        );
+        req.headers_mut()
+            .insert("cf-connecting-ip", "198.51.100.1".parse().unwrap());
+        let resp = send(public.clone(), req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "request {i}");
+    }
+    let mut req = json_request(
+        Method::POST,
+        "/api/feedback",
+        Some(submit_body("risk", "useful", "via cf")),
+        None,
+        99,
+    );
+    req.headers_mut()
+        .insert("cf-connecting-ip", "198.51.100.1".parse().unwrap());
+    let resp = send(public.clone(), req).await;
+    assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let mut req = json_request(
+        Method::POST,
+        "/api/feedback",
+        Some(submit_body("risk", "useful", "via cf")),
+        None,
+        99,
+    );
+    req.headers_mut()
+        .insert("cf-connecting-ip", "198.51.100.2".parse().unwrap());
+    let resp = send(public, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+#[tokio::test]
 async fn rate_limit_does_not_apply_to_status_or_widget() {
     let (state, _dir) = test_state().await;
     let public = public_router(state);
