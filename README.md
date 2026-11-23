@@ -25,7 +25,10 @@ fleet. Rust (Axum + sqlx/SQLite), single binary, no external services.
 `email` is **optional** and never required. It is stored solely so the team can
 reply about that specific submission. It is never shared, never used for
 marketing, and there is no mailing-list, newsletter, or tracking code anywhere
-in this service — by policy and by schema.
+in this service — by policy and by schema. Automated triage is metadata-only:
+raw feedback, email addresses, page URLs, and query strings are never exported
+to GitHub issues or repository reports. Human review stays behind the
+localhost-only admin queue; any reply requires explicit approval.
 
 ## Rate limiting
 
